@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>GIF Maker</title>
+<style>
+:root{--bg:#f6f5f2;--card:#fff;--tx:#1d1d1b;--mut:#6b6b66;--bd:#dcdad3;--ac:#6d4aff;--act:#fff;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#161615;--card:#222221;--tx:#f0efea;--mut:#a09f98;--bd:#383835;--ac:#8d73ff;--act:#111;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#161615;--card:#222221;--tx:#f0efea;--mut:#a09f98;--bd:#383835;--ac:#8d73ff;--act:#111;color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:760px;margin:0 auto;padding:24px 16px 48px}
+h1{font-size:26px;margin:0 0 4px}
+p.sub{color:var(--mut);margin:0 0 20px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:16px;margin-bottom:16px}
+#drop{border:2px dashed var(--bd);border-radius:12px;padding:28px;text-align:center;color:var(--mut);cursor:pointer}
+#drop.over{border-color:var(--ac);color:var(--tx)}
+#frames{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px;margin-top:14px}
+.fr{border:1px solid var(--bd);border-radius:10px;overflow:hidden;background:var(--bg)}
+.fr img{display:block;width:100%;aspect-ratio:1;object-fit:cover}
+.fr div{display:flex;justify-content:space-between;padding:4px}
+button{font:inherit;cursor:pointer;border:1px solid var(--bd);background:var(--card);color:var(--tx);border-radius:8px;padding:4px 9px}
+button.main{background:var(--ac);color:var(--act);border-color:var(--ac);padding:10px 20px;font-weight:600;border-radius:10px}
+button:disabled{opacity:.5;cursor:default}
+.row{display:flex;flex-wrap:wrap;gap:18px;align-items:center}
+label{display:flex;flex-direction:column;gap:4px;color:var(--mut);font-size:13px}
+input[type=number]{width:100px;font:inherit;padding:6px;border:1px solid var(--bd);border-radius:8px;background:var(--bg);color:var(--tx)}
+input[type=range]{width:200px}
+#bar{height:6px;background:var(--bd);border-radius:3px;overflow:hidden;margin-top:12px;display:none}
+#bar i{display:block;height:100%;width:0;background:var(--ac)}
+#out{text-align:center}
+#out img{max-width:100%;border-radius:10px;border:1px solid var(--bd)}
+.mut{color:var(--mut);font-size:13px}
+#vp{margin-top:14px;padding-top:14px;border-top:1px solid var(--bd)}
+#pv{width:100%;max-height:260px;border-radius:10px;background:#000}
+</style>
+</head>
+<body>
+<main>
+<h1>GIF Maker</h1>
+<p class="sub">Add images, set the timing, and build an animated GIF right in your browser.</p>
+
+<div class="card">
+  <div id="drop">Drop images or videos here, or tap to choose<br><span class="mut">PNG, JPG, WebP, MP4, WebM… (they stay on your device)</span></div>
+  <input id="file" type="file" accept="image/*,video/*" multiple hidden>
+  <div id="vp" hidden>
+    <video id="pv" controls muted playsinline></video>
+    <div class="row" style="margin-top:10px">
+      <label>Start (s)<input id="vs" type="number" min="0" step="0.1" value="0"></label>
+      <label>End (s)<input id="ve" type="number" min="0" step="0.1" value="3"></label>
+      <label>Frames per second<input id="vf" type="number" min="1" max="30" value="10"></label>
+      <button id="vx" class="main" style="align-self:flex-end">Extract frames</button>
+    </div>
+    <p class="mut" id="vst">Pick a short clip: up to 500 frames are captured.</p>
+  </div>
+  <div id="frames"></div>
+</div>
+
+<div class="card">
+  <div class="row">
+    <label>Frame delay: <b id="dv">300</b> ms
+      <input id="delay" type="range" min="40" max="2000" step="10" value="300"></label>
+    <label>Width (px)
+      <input id="width" type="number" min="40" max="800" value="320"></label>
+    <label style="flex-direction:row;align-items:center;gap:8px"><input id="loop" type="checkbox" checked> Loop forever</label>
+  </div>
+  <div style="margin-top:16px"><button id="go" class="main" disabled>Create GIF</button></div>
+  <div id="bar"><i></i></div>
+</div>
+
+<div class="card" id="out" hidden>
+  <img id="res" alt="Your GIF">
+  <p class="mut" id="info"></p>
+  <p class="mut">Right-click (or press and hold on mobile) the GIF to save it.</p>
+</div>
+</main>
+
+<script>
+const $=s=>document.querySelector(s);
+let items=[];
+
+function readFile(f){return new Promise(r=>{const fr=new FileReader();fr.onload=()=>{const im=new Image();im.onload=()=>r({img:im,src:fr.result});im.onerror=()=>r(null);im.src=fr.result};fr.onerror=()=>r(null);fr.readAsDataURL(f)})}
+async function add(files){
+  for(const f of files){ if(f.type.startsWith('video/')){openVideo(f);continue}
+    if(!f.type.startsWith('image/'))continue; const it=await readFile(f); if(it)items.push(it); }
+  render();
+}
+function render(){
+  const box=$('#frames'); box.innerHTML='';
+  items.forEach((it,i)=>{
+    const d=document.createElement('div'); d.className='fr';
+    d.innerHTML='<img src="'+it.src+'" alt=""><div><button data-a="l">←</button><span class="mut">'+(i+1)+'</span><button data-a="x">✕</button><button data-a="r">→</button></div>';
+    d.querySelectorAll('button').forEach(b=>b.onclick=()=>{
+      const a=b.dataset.a;
+      if(a==='x')items.splice(i,1);
+      else if(a==='l'&&i>0)[items[i-1],items[i]]=[items[i],items[i-1]];
+      else if(a==='r'&&i<items.length-1)[items[i+1],items[i]]=[items[i],items[i+1]];
+      render();
+    });
+    box.appendChild(d);
+  });
+  $('#go').disabled=items.length<1;
+}
+const drop=$('#drop'),file=$('#file');
+drop.onclick=()=>file.click();
+file.onchange=()=>{add([...file.files]);file.value=''};
+['dragover','dragenter'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.add('over')}));
+['dragleave','drop'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.remove('over')}));
+drop.addEventListener('drop',ev=>add([...ev.dataTransfer.files]));
+$('#delay').oninput=e=>$('#dv').textContent=e.target.value;
+
+/* ---- video to frames ---- */
+function openVideo(f){
+  const v=$('#pv');v.dataset.fb='';
+  v.onloadedmetadata=()=>{
+    $('#vs').value=0;$('#ve').value=Math.min(v.duration,3).toFixed(1);
+    $('#vp').hidden=false;$('#vst').textContent='Clip length: '+v.duration.toFixed(1)+' s. Choose a range, then extract.';
+  };
+  v.onerror=()=>{
+    if(!v.dataset.fb){v.dataset.fb='1';const fr=new FileReader();fr.onload=()=>{v.src=fr.result};fr.readAsDataURL(f)}
+    else alert('This browser can’t play that video format. Try an MP4 or WebM file.');
+  };
+  v.src=URL.createObjectURL(f);
+}
+const seek=(v,t)=>new Promise(r=>{
+  const done=()=>{v.removeEventListener('seeked',done);clearTimeout(to);r()};
+  const to=setTimeout(done,1500);
+  v.addEventListener('seeked',done);v.currentTime=t;
+});
+$('#vx').onclick=async()=>{
+  const v=$('#pv'),btn=$('#vx'),st=$('#vst');
+  const dur=v.duration||0,s=Math.max(0,+$('#vs').value||0),e=Math.min(+$('#ve').value||dur,dur);
+  const fps=Math.max(1,Math.min(30,+$('#vf').value||10));
+  const n=Math.max(1,Math.min(500,Math.floor((e-s)*fps)));
+  const sc=Math.min(1,800/v.videoWidth),w=Math.round(v.videoWidth*sc),h=Math.round(v.videoHeight*sc);
+  const cv=document.createElement('canvas');cv.width=w;cv.height=h;const ctx=cv.getContext('2d');
+  btn.disabled=true;v.pause();
+  try{
+    for(let i=0;i<n;i++){
+      await seek(v,Math.min(s+i/fps+0.001,Math.max(0,dur-0.01)));
+      ctx.drawImage(v,0,0,w,h);
+      const src=cv.toDataURL('image/jpeg',0.85);
+      const im=await new Promise(r=>{const x=new Image();x.onload=()=>r(x);x.src=src});
+      items.push({img:im,src});
+      st.textContent='Extracting frame '+(i+1)+' of '+n+'…';
+    }
+    $('#delay').value=Math.max(40,Math.round(1000/fps));$('#dv').textContent=$('#delay').value;
+    st.textContent='Added '+n+' frames. Pick another range or create your GIF below.';
+    render();
+  }catch(err){alert('Could not extract frames: '+err.message)}
+  btn.disabled=false;
+};
+
+/* ---- GIF encoder ---- */
+function lzw(px,minCode){
+  const clear=1<<minCode,eoi=clear+1;let size=minCode+1,next=eoi+1;
+  const out=[];let cur=0,bits=0;
+  const emit=c=>{cur|=c<<bits;bits+=size;while(bits>=8){out.push(cur&255);cur>>>=8;bits-=8}};
+  let dict=new Map();emit(clear);
+  let p=px[0];
+  for(let i=1;i<px.length;i++){
+    const k=px[i],key=(p<<8)|k,v=dict.get(key);
+    if(v!==undefined){p=v;continue}
+    emit(p);p=k;
+    if(next===4096){emit(clear);next=eoi+1;size=minCode+1;dict=new Map()}
+    else{if(next>=(1<<size))size++;dict.set(key,next++)}
+  }
+  emit(p);emit(eoi);
+  if(bits>0)out.push(cur&255);
+  return out;
+}
+function buildPalette(frames){
+  const cnt=new Float64Array(4096),sr=new Float64Array(4096),sg=new Float64Array(4096),sb=new Float64Array(4096);
+  for(const d of frames){for(let i=0;i<d.length;i+=4*3){
+    const r=d[i],g=d[i+1],b=d[i+2],k=(r>>4)<<8|(g>>4)<<4|(b>>4);
+    cnt[k]++;sr[k]+=r;sg[k]+=g;sb[k]+=b;}}
+  const keys=[];for(let k=0;k<4096;k++)if(cnt[k])keys.push(k);
+  keys.sort((a,b)=>cnt[b]-cnt[a]);
+  const top=keys.slice(0,256),pal=new Uint8Array(768);
+  top.forEach((k,i)=>{pal[i*3]=sr[k]/cnt[k];pal[i*3+1]=sg[k]/cnt[k];pal[i*3+2]=sb[k]/cnt[k]});
+  return {pal,n:top.length};
+}
+function indexFrame(d,pal,n,cache){
+  const out=new Uint8Array(d.length/4);
+  for(let i=0,j=0;i<d.length;i+=4,j++){
+    const r=d[i],g=d[i+1],b=d[i+2],k=(r>>4)<<8|(g>>4)<<4|(b>>4);
+    let c=cache[k];
+    if(c<0){
+      const cr=(k>>8&15)*17,cg=(k>>4&15)*17,cb=(k&15)*17;let best=1e9;c=0;
+      for(let q=0;q<n;q++){const dr=pal[q*3]-cr,dg=pal[q*3+1]-cg,db=pal[q*3+2]-cb,e=dr*dr+dg*dg+db*db;if(e<best){best=e;c=q}}
+      cache[k]=c;
+    }
+    out[j]=c;
+  }
+  return out;
+}
+function writeGIF(w,h,idx,pal,delayMs,loop){
+  const o=[],w16=v=>o.push(v&255,v>>8&255);
+  o.push(...[..."GIF89a"].map(c=>c.charCodeAt(0)));
+  w16(w);w16(h);o.push(0xF7,0,0);
+  for(let i=0;i<768;i++)o.push(pal[i]);
+  if(loop){o.push(0x21,0xFF,11,...[..."NETSCAPE2.0"].map(c=>c.charCodeAt(0)),3,1,0,0,0)}
+  const cs=Math.max(2,Math.round(delayMs/10));
+  for(const px of idx){
+    o.push(0x21,0xF9,4,0x04);w16(cs);o.push(0,0);
+    o.push(0x2C);w16(0);w16(0);w16(w);w16(h);o.push(0);
+    o.push(8);
+    const data=lzw(px,8);
+    for(let i=0;i<data.length;i+=255){const ch=data.slice(i,i+255);o.push(ch.length,...ch)}
+    o.push(0);
+  }
+  o.push(0x3B);
+  return new Uint8Array(o);
+}
+
+$('#go').onclick=async()=>{
+  const btn=$('#go'),bar=$('#bar'),fill=bar.firstElementChild;
+  btn.disabled=true;bar.style.display='block';fill.style.width='0';
+  const tick=()=>new Promise(r=>setTimeout(r,0));
+  try{
+    const W=Math.max(40,Math.min(800,+$('#width').value||320));
+    const a=items[0].img,H=Math.round(W*a.naturalHeight/a.naturalWidth);
+    const cv=document.createElement('canvas');cv.width=W;cv.height=H;
+    const ctx=cv.getContext('2d',{willReadFrequently:true});
+    const data=[];
+    for(const it of items){
+      const im=it.img,s=Math.max(W/im.naturalWidth,H/im.naturalHeight);
+      const dw=im.naturalWidth*s,dh=im.naturalHeight*s;
+      ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+      ctx.drawImage(im,(W-dw)/2,(H-dh)/2,dw,dh);
+      data.push(ctx.getImageData(0,0,W,H).data);
+    }
+    const {pal,n}=buildPalette(data),cache=new Int16Array(4096).fill(-1),idx=[];
+    for(let i=0;i<data.length;i++){
+      idx.push(indexFrame(data[i],pal,n,cache));
+      fill.style.width=((i+1)/data.length*60)+'%';await tick();
+    }
+    fill.style.width='85%';await tick();
+    const bytes=writeGIF(W,H,idx,pal,+$('#delay').value,$('#loop').checked);
+    const url=await new Promise(r=>{const fr=new FileReader();fr.onload=()=>r(fr.result);fr.readAsDataURL(new Blob([bytes],{type:'image/gif'}))});
+    $('#res').src=url;
+    $('#info').textContent=W+' × '+H+' px · '+items.length+(items.length===1?' frame · ':' frames · ')+(bytes.length/1024).toFixed(1)+' KB';
+    $('#out').hidden=false;fill.style.width='100%';
+    $('#out').scrollIntoView({behavior:'smooth'});
+  }catch(e){alert('Something went wrong: '+e.message)}
+  btn.disabled=items.length<1;setTimeout(()=>bar.style.display='none',600);
+};
+</script>
+</body>
+</html>
