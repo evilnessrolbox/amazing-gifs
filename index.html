@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>GIF Maker</title>
+<title>welcome to gifwave</title>
 <style>
 :root{--bg:#f6f5f2;--card:#fff;--tx:#1d1d1b;--mut:#6b6b66;--bd:#dcdad3;--ac:#6d4aff;--act:#fff;
 box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}
@@ -134,7 +134,7 @@ $('#vx').onclick=async()=>{
   const v=$('#pv'),btn=$('#vx'),st=$('#vst');
   const dur=v.duration||0,s=Math.max(0,+$('#vs').value||0),e=Math.min(+$('#ve').value||dur,dur);
   const fps=Math.max(1,Math.min(30,+$('#vf').value||10));
-  const n=Math.max(1,Math.min(500,Math.floor((e-s)*fps)));
+  const n=Math.max(1,Math.min(1250,Math.floor((e-s)*fps)));
   const sc=Math.min(1,800/v.videoWidth),w=Math.round(v.videoWidth*sc),h=Math.round(v.videoHeight*sc);
   const cv=document.createElement('canvas');cv.width=w;cv.height=h;const ctx=cv.getContext('2d');
   btn.disabled=true;v.pause();
